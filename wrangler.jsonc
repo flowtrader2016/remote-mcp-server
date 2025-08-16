@@ -25,7 +25,13 @@
 	"kv_namespaces": [
 		{
 			"binding": "OAUTH_KV",
-			"id": "426f1fb1d6114f5d93d6e9945f47a9e3"
+			"id": "99720aa2de0840859672e5f100163432"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "SEARCH_DATA",
+			"bucket_name": "security-article-search-data"
 		}
 	],
 	"observability": {

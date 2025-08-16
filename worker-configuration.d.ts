@@ -3,6 +3,7 @@
 declare namespace Cloudflare {
 	interface Env {
 		OAUTH_KV: KVNamespace;
+		SEARCH_DATA: R2Bucket;
 		MCP_OBJECT: DurableObjectNamespace<import("./src/index").MyMCP>;
 		ASSETS: Fetcher;
 	}

@@ -1,110 +1,75 @@
 import { Hono } from "hono";
-import {
-	layout,
-	homeContent,
-	parseApproveFormBody,
-	renderAuthorizationRejectedContent,
-	renderAuthorizationApprovedContent,
-	renderLoggedInAuthorizeScreen,
-	renderLoggedOutAuthorizeScreen,
-} from "./utils";
-import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import { verifyAccessJWT } from "./access-auth";
 
-export type Bindings = Env & {
-	OAUTH_PROVIDER: OAuthHelpers;
-};
+export type Bindings = Env;
 
 const app = new Hono<{
 	Bindings: Bindings;
 }>();
 
-// Render a basic homepage placeholder to make sure the app is up
+// Basic homepage with auth status
 app.get("/", async (c) => {
-	const content = await homeContent(c.req.raw);
-	return c.html(layout(content, "MCP Remote Auth Demo - Home"));
+	const user = await verifyAccessJWT(c.req.raw, c.env);
+	
+	if (user) {
+		return c.html(`
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<title>MCP Security Search Server</title>
+				<style>
+					body { font-family: system-ui; padding: 2rem; max-width: 600px; margin: 0 auto; }
+					.status { padding: 1rem; background: #10b981; color: white; border-radius: 0.5rem; }
+				</style>
+			</head>
+			<body>
+				<h1>MCP Security Search Server</h1>
+				<div class="status">
+					✅ Authenticated as: ${user.email || user.sub}
+				</div>
+				<p>You have access to the MCP server. Configure your Claude Desktop with:</p>
+				<pre style="background: #f3f4f6; padding: 1rem; border-radius: 0.5rem; overflow-x: auto;">
+"security-search-remote": {
+  "command": "npx",
+  "args": ["mcp-remote", "https://remote-mcp-server.nick-simo.workers.dev/sse"]
+}
+				</pre>
+			</body>
+			</html>
+		`);
+	}
+	
+	return c.html(`
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<title>MCP Security Search Server - Access Required</title>
+			<style>
+				body { font-family: system-ui; padding: 2rem; max-width: 600px; margin: 0 auto; }
+				.status { padding: 1rem; background: #ef4444; color: white; border-radius: 0.5rem; }
+				a { color: #3b82f6; }
+			</style>
+		</head>
+		<body>
+			<h1>MCP Security Search Server</h1>
+			<div class="status">
+				🔒 Authentication Required
+			</div>
+			<p>This MCP server is protected by Cloudflare Access.</p>
+			<p>You need to authenticate through Cloudflare Access to use this server.</p>
+		</body>
+		</html>
+	`);
 });
 
-// Render an authorization page
-// If the user is logged in, we'll show a form to approve the appropriate scopes
-// If the user is not logged in, we'll show a form to both login and approve the scopes
-app.get("/authorize", async (c) => {
-	// We don't have an actual auth system, so to demonstrate both paths, you can
-	// hard-code whether the user is logged in or not. We'll default to true
-	// const isLoggedIn = false;
-	const isLoggedIn = true;
-
-	const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
-
-	const oauthScopes = [
-		{
-			name: "read_profile",
-			description: "Read your basic profile information",
-		},
-		{ name: "read_data", description: "Access your stored data" },
-		{ name: "write_data", description: "Create and modify your data" },
-	];
-
-	if (isLoggedIn) {
-		const content = await renderLoggedInAuthorizeScreen(oauthScopes, oauthReqInfo);
-		return c.html(layout(content, "MCP Remote Auth Demo - Authorization"));
-	}
-
-	const content = await renderLoggedOutAuthorizeScreen(oauthScopes, oauthReqInfo);
-	return c.html(layout(content, "MCP Remote Auth Demo - Authorization"));
-});
-
-// The /authorize page has a form that will POST to /approve
-// This endpoint is responsible for validating any login information and
-// then completing the authorization request with the OAUTH_PROVIDER
-app.post("/approve", async (c) => {
-	const {
-		action,
-		oauthReqInfo,
-		email,
-		password: _password,
-	} = await parseApproveFormBody(await c.req.parseBody());
-
-	if (!oauthReqInfo) {
-		return c.html("INVALID LOGIN", 401);
-	}
-
-	// If the user needs to both login and approve, we should validate the login first
-	if (action === "login_approve") {
-		// We'll allow any values for email and password for this demo
-		// but you could validate them here
-		// Ex:
-		// if (email !== "user@example.com" || password !== "password") {
-		// biome-ignore lint/correctness/noConstantCondition: This is a demo
-		if (false) {
-			return c.html(
-				layout(
-					await renderAuthorizationRejectedContent("/"),
-					"MCP Remote Auth Demo - Authorization Status",
-				),
-			);
-		}
-	}
-
-	// The user must be successfully logged in and have approved the scopes, so we
-	// can complete the authorization request
-	const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({
-		request: oauthReqInfo,
-		userId: email,
-		metadata: {
-			label: "Test User",
-		},
-		scope: oauthReqInfo.scope,
-		props: {
-			userEmail: email,
-		},
+// Health check endpoint
+app.get("/health", async (c) => {
+	const user = await verifyAccessJWT(c.req.raw, c.env);
+	return c.json({
+		status: "ok",
+		authenticated: !!user,
+		user: user ? { email: user.email, sub: user.sub } : null
 	});
-
-	return c.html(
-		layout(
-			await renderAuthorizationApprovedContent(redirectTo),
-			"MCP Remote Auth Demo - Authorization Status",
-		),
-	);
 });
 
 export default app;

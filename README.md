@@ -1,22 +1,41 @@
-# Remote MCP Server on Cloudflare
+# Security Article Search MCP Server on Cloudflare
 
-Let's get a remote MCP server up-and-running on Cloudflare Workers complete with OAuth login!
+A remote MCP server that provides access to 4000+ security articles with advanced search capabilities, deployed on Cloudflare Workers with OAuth authentication.
 
-## Develop locally
+## Features
+
+- 🔍 **Advanced Search**: Query 4000+ security articles across 40+ fields
+- 🛡️ **OAuth Authentication**: Secure access with Cloudflare OAuth Provider  
+- ☁️ **Cloudflare R2 Storage**: Efficient storage for large metadata
+- 🚀 **6 Powerful Tools**:
+  - `get_workflow_instructions`: Learn the correct search workflow
+  - `show_searchable_fields`: Discover all searchable fields
+  - `get_field_values`: Get exact field values for filtering
+  - `query_articles`: Search articles with complex filters
+  - `get_article_details`: Get full article information
+  - `show_field_values`: Compatibility alias for field values
+
+## Prerequisites
+
+- Node.js 18+ installed
+- Cloudflare account with Workers and R2 enabled
+- Wrangler CLI (`npm install -g wrangler`)
+- The original `search_metadata.json` file from your Python MCP
+
+## Setup & Installation
 
 ```bash
-# clone the repository
-git clone https://github.com/cloudflare/ai.git
-# Or if using ssh:
-# git clone git@github.com:cloudflare/ai.git
+# 1. Install dependencies
+npm install
 
-# install dependencies
-cd ai
-# Note: using pnpm instead of just "npm"
-pnpm install
+# 2. Login to Cloudflare
+npx wrangler login
 
-# run locally
-npx nx dev remote-mcp-server
+# 3. Upload metadata to R2 (creates bucket automatically)
+npm run setup
+
+# 4. Run locally for testing
+npm run dev
 ```
 
 You should be able to open [`http://localhost:8787/`](http://localhost:8787/) in your browser
@@ -47,7 +66,7 @@ Open the file in your text editor and replace it with this configuration:
 ```json
 {
   "mcpServers": {
-    "math": {
+    "security-search": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -72,9 +91,19 @@ When you open Claude a browser window should open and allow you to login. You sh
 
 ## Deploy to Cloudflare
 
-1. `npx wrangler kv namespace create OAUTH_KV`
-2. Follow the guidance to add the kv namespace ID to `wrangler.jsonc`
-3. `npm run deploy`
+```bash
+# 1. Create KV namespace for OAuth (if not already created)
+npx wrangler kv namespace create OAUTH_KV
+# Update the ID in wrangler.jsonc if needed
+
+# 2. Ensure R2 bucket exists and data is uploaded
+npm run upload-data
+
+# 3. Deploy to Cloudflare Workers
+npm run deploy
+```
+
+After deployment, you'll receive a URL like: `https://security-article-search-mcp.<your-subdomain>.workers.dev`
 
 ## Call your newly deployed remote MCP server from a remote MCP client
 
@@ -88,16 +117,21 @@ You've now connected to your MCP server from a remote MCP client.
 
 ## Connect Claude Desktop to your remote MCP server
 
-Update the Claude configuration file to point to your `workers.dev` URL (ex: `worker-name.account-name.workers.dev/sse`) and restart Claude 
+Update the Claude configuration file to point to your `workers.dev` URL and restart Claude.
+
+**IMPORTANT**: 
+- Use `mcp-remote` (NOT `@cloudflare/mcp-server-cloudflare`)
+- Replace `your-account` with your actual Cloudflare account name
+- Remove any local Python MCP configs to avoid duplicate tools
 
 ```json
 {
   "mcpServers": {
-    "math": {
+    "security-search-remote": {
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://worker-name.account-name.workers.dev/sse"
+        "https://remote-mcp-server.your-account.workers.dev/sse"
       ]
     }
   }

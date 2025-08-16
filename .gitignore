@@ -176,3 +176,11 @@ dist
 
 .dev.vars
 .wrangler/
+
+# Access configuration (contains sensitive IDs)
+access-config.json
+
+# Temporary test scripts
+test-*.sh
+setup-*.sh
+create-*.sh
