@@ -1,0 +1,41 @@
+{
+  "name": "remote-mcp-server",
+  "main": "src/container-index.ts",
+  "compatibility_date": "2024-01-01",
+  
+  // Container configuration
+  "containers": [
+    {
+      "class_name": "MCPContainer",
+      "image": "./Dockerfile",
+      "instance_type": "standard",  // 4GB memory
+      "max_instances": 5  // Scale up to 5 concurrent containers
+    }
+  ],
+  
+  // Durable Object binding for Container management
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MCP_CONTAINER",
+        "class_name": "MCPContainer"
+      }
+    ]
+  },
+  
+  // Migration for Durable Objects
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MCPContainer"]
+    }
+  ],
+  
+  // Keep R2 bucket for any direct Worker access if needed
+  "r2_buckets": [
+    {
+      "binding": "SEARCH_DATA",
+      "bucket_name": "security-article-search-data"
+    }
+  ]
+}
