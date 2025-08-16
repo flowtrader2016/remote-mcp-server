@@ -5,11 +5,22 @@ import { verifyAccessJWT } from "./access-auth";
  * Handles SSE connections from Claude Desktop and translates to Container HTTP calls
  */
 export async function handleSSEEndpoint(request: Request, env: Env, container: any): Promise<Response> {
-  // Verify authentication - TEMPORARILY DISABLED FOR TESTING
-  // const user = await verifyAccessJWT(request, env);
-  // if (!user) {
-  //   return new Response("Unauthorized", { status: 401 });
-  // }
+  // Verify authentication
+  // Check if service token headers are present
+  const clientId = request.headers.get('CF-Access-Client-Id');
+  const clientSecret = request.headers.get('CF-Access-Client-Secret');
+  
+  if (clientId === '2dbe8ab597f81c3308530d3e61691765.access' && 
+      clientSecret === '2932b4b3f043c1560893d78735f6b3682cc1b5a6c284ad4226e4ca09c453a34a') {
+    // Valid service token - allow access
+    console.log('Authenticated via service token');
+  } else {
+    // Check for JWT from browser auth
+    const user = await verifyAccessJWT(request, env);
+    if (!user) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+  }
 
   // Create SSE response stream
   const { readable, writable } = new TransformStream();
