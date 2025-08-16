@@ -1,5 +1,6 @@
 import { Container, getContainer, getRandom } from "@cloudflare/containers";
 import { verifyAccessJWT } from "./access-auth";
+import { handleSSEEndpoint } from "./container-mcp-bridge";
 
 /**
  * MCP Container configuration
@@ -27,6 +28,13 @@ export default {
       return new Response(JSON.stringify({ status: "ok", worker: true }), {
         headers: { "Content-Type": "application/json" }
       });
+    }
+    
+    // SSE endpoint for MCP protocol (Claude Desktop)
+    if (url.pathname === "/sse") {
+      // Get container instance for proxying
+      const container = getRandom(env.MCP_CONTAINER);
+      return handleSSEEndpoint(request, env, container);
     }
     
     // Home page (auth-aware)
@@ -109,10 +117,12 @@ export default {
       });
     }
     
-    // All API endpoints require authentication
-    const user = await verifyAccessJWT(request, env);
-    if (!user) {
-      return new Response("Unauthorized", { status: 401 });
+    // API endpoints (excluding /health and /) require authentication
+    if (url.pathname !== "/health" && url.pathname !== "/") {
+      const user = await verifyAccessJWT(request, env);
+      if (!user) {
+        return new Response("Unauthorized", { status: 401 });
+      }
     }
     
     // Get or create a container instance

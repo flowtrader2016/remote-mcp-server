@@ -1,7 +1,8 @@
 {
   "name": "remote-mcp-server",
-  "main": "src/container-index.ts",
-  "compatibility_date": "2024-01-01",
+  "main": "src/hybrid-index.ts",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat"],
   
   // Container configuration
   "containers": [
@@ -9,13 +10,17 @@
       "class_name": "MCPContainer",
       "image": "./Dockerfile",
       "instance_type": "standard",  // 4GB memory
-      "max_instances": 5  // Scale up to 5 concurrent containers
+      "max_instances": 5
     }
   ],
   
-  // Durable Object binding for Container management
+  // Durable Objects for both MCP handler and Container
   "durable_objects": {
     "bindings": [
+      {
+        "name": "HYBRID_MCP",
+        "class_name": "HybridMCP"
+      },
       {
         "name": "MCP_CONTAINER",
         "class_name": "MCPContainer"
@@ -23,16 +28,15 @@
     ]
   },
   
-  // Migration for Durable Objects
+  // Migration to new Durable Objects
   "migrations": [
     {
-      "tag": "v2",
-      "new_sqlite_classes": ["MCPContainer"],
-      "deleted_classes": ["MyMCP"]
+      "tag": "v5",
+      "new_sqlite_classes": ["HybridMCP"]
     }
   ],
   
-  // Keep R2 bucket for any direct Worker access if needed
+  // R2 bucket for direct Worker access if needed
   "r2_buckets": [
     {
       "binding": "SEARCH_DATA",
