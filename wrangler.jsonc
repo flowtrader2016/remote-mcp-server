@@ -5,20 +5,14 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "remote-mcp-server",
-	"main": "src/index.ts",
+	"main": "src/simple-mcp-index.ts",
 	"compatibility_date": "2025-03-10",
 	"compatibility_flags": ["nodejs_compat"],
-	"migrations": [
-		{
-			"new_sqlite_classes": ["MyMCP"],
-			"tag": "v1"
-		}
-	],
 	"durable_objects": {
 		"bindings": [
 			{
-				"class_name": "MyMCP",
-				"name": "MCP_OBJECT"
+				"class_name": "MCPContainer",
+				"name": "MCP_CONTAINER"
 			}
 		]
 	},

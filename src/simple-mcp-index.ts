@@ -1,4 +1,4 @@
-import { Container, getRandom } from "@cloudflare/containers";
+import { Container } from "@cloudflare/containers";
 import { verifyAccessJWT } from "./access-auth";
 
 /**
@@ -14,6 +14,9 @@ export class MCPContainer extends Container {
   };
 }
 
+// Export with both names for compatibility
+export class MCP_CONTAINER extends MCPContainer {}
+
 /**
  * Simple MCP implementation that handles HTTP streaming
  */
@@ -23,8 +26,12 @@ export default {
     
     // Health check endpoint
     if (url.pathname === "/health") {
-      const container = getRandom(env.MCP_CONTAINER);
       try {
+        // Get container instance through Durable Object stub
+        const id = env.MCP_CONTAINER.idFromName("singleton");
+        const container = env.MCP_CONTAINER.get(id);
+        
+        // Just check container health without loading data
         const containerHealth = await container.fetch(new Request("http://container/health"));
         const healthData = await containerHealth.json();
         return new Response(JSON.stringify({ 
@@ -55,7 +62,9 @@ export default {
       
       try {
         const body = await request.json();
-        const container = getRandom(env.MCP_CONTAINER);
+        // Get container instance through Durable Object stub
+        const id = env.MCP_CONTAINER.idFromName("singleton");
+        const container = env.MCP_CONTAINER.get(id);
         
         // Handle MCP protocol messages
         if (body.method === "initialize") {
@@ -158,6 +167,79 @@ export default {
         if (body.method === "tools/call") {
           const { name, arguments: args } = body.params;
           
+          // Ensure container has data loaded before processing
+          const containerHealth = await container.fetch(new Request("http://container/health"));
+          const healthData = await containerHealth.json();
+          
+          if (healthData.articles === 0) {
+            console.log("Loading data into container from R2...");
+            // Get the R2 object
+            const metadata = await env.SEARCH_DATA.get("search_metadata.json");
+            if (metadata) {
+              // Stream directly from R2 to Container without loading into Worker memory
+              const stream = metadata.body;
+              if (stream) {
+                try {
+                  const loadResponse = await container.fetch(new Request("http://container/load-data", {
+                    method: "POST",
+                    headers: { 
+                      "Content-Type": "application/json",
+                      "Content-Length": metadata.size?.toString() || "0"
+                    },
+                    body: stream  // Stream directly without parsing
+                  }));
+                  
+                  if (!loadResponse.ok) {
+                    let errorText = "";
+                    try {
+                      errorText = await loadResponse.text();
+                    } catch (e) {
+                      errorText = `Status ${loadResponse.status}`;
+                    }
+                    console.error("Failed to load data into container:", errorText);
+                    
+                    return new Response(JSON.stringify({
+                      jsonrpc: "2.0",
+                      id: body.id,
+                      error: {
+                        code: -32603,
+                        message: `Failed to load data into container: ${errorText}`
+                      }
+                    }), {
+                      headers: { "Content-Type": "application/json" }
+                    });
+                  }
+                  
+                  console.log("Data loaded successfully into container");
+                } catch (loadError: any) {
+                  console.error("Error loading data into container:", loadError);
+                  return new Response(JSON.stringify({
+                    jsonrpc: "2.0",
+                    id: body.id,
+                    error: {
+                      code: -32603,
+                      message: `Error loading data: ${loadError.message || String(loadError)}`
+                    }
+                  }), {
+                    headers: { "Content-Type": "application/json" }
+                  });
+                }
+              }
+            } else {
+              console.error("search_metadata.json not found in R2");
+              return new Response(JSON.stringify({
+                jsonrpc: "2.0",
+                id: body.id,
+                error: {
+                  code: -32603,
+                  message: "Data not found in R2 storage"
+                }
+              }), {
+                headers: { "Content-Type": "application/json" }
+              });
+            }
+          }
+          
           let containerResponse: Response;
           
           switch (name) {
@@ -195,19 +277,55 @@ export default {
           }
           
           if (!containerResponse.ok) {
+            // Try to get error message from response body
+            let errorMessage = `Container error: ${containerResponse.status}`;
+            try {
+              const errorText = await containerResponse.text();
+              if (errorText) {
+                errorMessage = `Container error: ${errorText}`;
+              }
+            } catch (e) {
+              // If we can't read the error, use the status code
+            }
+            
             return new Response(JSON.stringify({
               jsonrpc: "2.0",
               id: body.id,
               error: {
                 code: -32603,
-                message: `Container error: ${containerResponse.status}`
+                message: errorMessage
               }
             }), {
               headers: { "Content-Type": "application/json" }
             });
           }
           
-          const result = await containerResponse.json();
+          // Try to parse JSON response, handle non-JSON responses
+          let result;
+          try {
+            result = await containerResponse.json();
+          } catch (jsonError) {
+            // If response is not JSON, try to read as text
+            let responseText = "";
+            try {
+              // Clone the response since we might have already consumed it
+              responseText = await containerResponse.text();
+            } catch (e) {
+              responseText = "Unable to read response";
+            }
+            
+            // Return error in proper JSON-RPC format
+            return new Response(JSON.stringify({
+              jsonrpc: "2.0",
+              id: body.id,
+              error: {
+                code: -32603,
+                message: `Container returned non-JSON response: ${responseText}`
+              }
+            }), {
+              headers: { "Content-Type": "application/json" }
+            });
+          }
           
           const response = {
             jsonrpc: "2.0",

@@ -32,8 +32,9 @@ export default {
     
     // SSE endpoint for MCP protocol (Claude Desktop)
     if (url.pathname === "/sse") {
-      // Get container instance for proxying
-      const container = getRandom(env.MCP_CONTAINER);
+      // Get Durable Object stub for the container
+      const id = env.MCP_CONTAINER.idFromName("singleton");
+      const container = env.MCP_CONTAINER.get(id);
       return handleSSEEndpoint(request, env, container);
     }
     

@@ -12,12 +12,11 @@ const CACHE_TTL = 60 * 60 * 1000; // 1 hour cache
 let metadataCache = null;
 let cacheLoadTime = 0;
 
-// R2 configuration from environment variables
-const R2_URL = process.env.R2_PUBLIC_URL || 'https://pub-7e17005f86444e028bc6c091baa4e227.r2.dev';
+// R2 configuration - data will be provided by Worker
 const METADATA_PATH = 'search_metadata.json';
 
 /**
- * Load metadata from R2 or cache
+ * Load metadata from cache or request from Worker
  */
 async function loadMetadata() {
   const now = Date.now();
@@ -44,26 +43,10 @@ async function loadMetadata() {
       }
     }
     
-    // Fetch from R2
-    console.log('Fetching from R2:', `${R2_URL}/${METADATA_PATH}`);
-    const response = await fetch(`${R2_URL}/${METADATA_PATH}`);
-    
-    if (!response.ok) {
-      throw new Error(`R2 fetch failed: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    // Save to disk cache
-    await fs.mkdir(path.dirname(CACHE_FILE), { recursive: true });
-    await fs.writeFile(CACHE_FILE, JSON.stringify(data));
-    
-    // Update in-memory cache
-    metadataCache = data;
-    cacheLoadTime = now;
-    
-    console.log(`Loaded ${data.length} articles from R2`);
-    return data;
+    // No cache available - return empty array for now
+    // The Worker will need to provide the data
+    console.log('No cached data available, returning empty array');
+    return [];
     
   } catch (error) {
     console.error('Error loading metadata:', error);
@@ -82,7 +65,7 @@ async function loadMetadata() {
       return JSON.parse(data);
     }
     
-    throw error;
+    return [];
   }
 }
 
@@ -91,12 +74,18 @@ async function loadMetadata() {
  */
 class SecuritySearchEngine {
   constructor(metadata) {
-    this.articles = metadata;
+    // Ensure articles is always an array
+    this.articles = Array.isArray(metadata) ? metadata : [];
     this.fieldIndex = this.buildFieldIndex();
   }
   
   buildFieldIndex() {
     const index = {};
+    
+    // Guard against empty or invalid articles
+    if (!this.articles || this.articles.length === 0) {
+      return index;
+    }
     
     this.articles.forEach(article => {
       Object.entries(article).forEach(([field, value]) => {
@@ -210,7 +199,7 @@ class SecuritySearchEngine {
 }
 
 // Express middleware
-app.use(express.json());
+app.use(express.json({ limit: '100mb' })); // Increase limit for large JSON
 
 // Health check
 app.get('/health', (req, res) => {
@@ -219,6 +208,34 @@ app.get('/health', (req, res) => {
     cache: metadataCache ? 'loaded' : 'empty',
     articles: metadataCache ? metadataCache.length : 0
   });
+});
+
+// Endpoint for Worker to upload data
+app.post('/load-data', async (req, res) => {
+  try {
+    const data = req.body;
+    
+    // Extract articles array from the metadata object
+    // Handle both formats: direct array or object with articles property
+    const articles = Array.isArray(data) ? data : (data.articles || []);
+    
+    // Save to memory cache
+    metadataCache = articles;
+    cacheLoadTime = Date.now();
+    
+    // Save to disk cache
+    await fs.mkdir(path.dirname(CACHE_FILE), { recursive: true });
+    await fs.writeFile(CACHE_FILE, JSON.stringify(articles));
+    
+    console.log(`Loaded ${articles.length} articles into cache`);
+    res.json({ 
+      status: 'ok', 
+      articles: articles.length 
+    });
+  } catch (error) {
+    console.error('Error loading data:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // MCP endpoints
@@ -282,6 +299,6 @@ loadMetadata()
 // Start server
 app.listen(PORT, () => {
   console.log(`MCP Container Server running on port ${PORT}`);
-  console.log(`R2 URL: ${R2_URL}`);
+  console.log(`R2 URL: ${process.env.R2_PUBLIC_URL || 'Not configured'}`);
   console.log(`Cache TTL: ${CACHE_TTL / 1000} seconds`);
 });

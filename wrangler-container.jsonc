@@ -23,14 +23,6 @@
     ]
   },
   
-  // Migration for Durable Objects
-  "migrations": [
-    {
-      "tag": "v2",
-      "new_sqlite_classes": ["MCPContainer"],
-      "deleted_classes": ["MyMCP"]
-    }
-  ],
   
   // Keep R2 bucket for any direct Worker access if needed
   "r2_buckets": [
