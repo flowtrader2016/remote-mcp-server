@@ -144,8 +144,6 @@ class SecuritySearchEngine {
   searchArticles({ filters = {}, since_date = null, limit = 30, summary_mode = true }) {
     let results = [...this.articles];
     
-    console.log(`searchArticles called with since_date: ${since_date}, filters:`, filters);
-    
     // Apply filters
     Object.entries(filters).forEach(([field, values]) => {
       if (values && values.length > 0) {
@@ -161,12 +159,10 @@ class SecuritySearchEngine {
     
     // Apply date filter
     if (since_date) {
-      const beforeCount = results.length;
       results = results.filter(article => {
         if (!article.article_date) return false;
         return article.article_date >= since_date;
       });
-      console.log(`Date filter: ${beforeCount} articles -> ${results.length} articles (since_date: ${since_date})`);
     }
     
     // Sort by date (newest first)
@@ -184,7 +180,7 @@ class SecuritySearchEngine {
       return results.map(article => ({
         id: article.id,
         title: article.title,
-        published_date: article.published_date,
+        article_date: article.article_date,
         severity_level: article.severity_level,
         summary: article.summary || article.description?.substring(0, 200)
       }));
