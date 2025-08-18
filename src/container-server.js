@@ -216,7 +216,7 @@ class SecuritySearchEngine {
     return article;
   }
   
-  searchFullText({ query, case_sensitive = false, whole_word = false, limit = 30, highlight = true }) {
+  searchFullText({ query, filters = {}, since_date = null, case_sensitive = false, whole_word = false, limit = 30, highlight = true }) {
     if (!query || query.trim() === '') {
       return { total_results: 0, query: query, results: [] };
     }
@@ -318,13 +318,13 @@ class SecuritySearchEngine {
       }
       
       return {
-        article_id: article.title,
-        title: article.title,
+        article_id: article.title || article.url || 'No title',
+        title: article.title || 'No title',
         article_date: article.date_original || article.article_date,
-        severity_level: article.severity_level,
-        summary: article.summary || article.description?.substring(0, 200),
-        url: article.url,
-        original_source_url: article.original_source_url,
+        severity_level: article.severity_level || '',
+        summary: article.summary || article.description?.substring(0, 200) || '',
+        url: article.url || '',
+        original_source_url: article.original_source_url || null,
         relevance_score: relevanceScore,
         match_count: matchCount,
         matched_in: matchedIn,
@@ -334,7 +334,47 @@ class SecuritySearchEngine {
     
     // Search through all articles
     for (const article of this.articles) {
-      // Combine all searchable text fields
+      // Apply date filter first (same as searchArticles)
+      if (since_date) {
+        const dateValue = article.date_original || article.article_date;
+        if (!dateValue) continue;
+        
+        // Skip invalid date formats
+        if (dateValue === 'YYYYMMDD' || dateValue.includes('২০')) {
+          continue;
+        }
+        
+        try {
+          const datePart = dateValue.split(' ')[0];
+          if (datePart < since_date) {
+            continue;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      // Apply field filters (same as searchArticles)
+      let passesFilters = true;
+      for (const [field, values] of Object.entries(filters)) {
+        if (values && values.length > 0) {
+          const articleValue = article[field];
+          if (Array.isArray(articleValue)) {
+            if (!values.some(v => articleValue.includes(v))) {
+              passesFilters = false;
+              break;
+            }
+          } else {
+            if (!values.includes(articleValue)) {
+              passesFilters = false;
+              break;
+            }
+          }
+        }
+      }
+      if (!passesFilters) continue;
+      
+      // Now do the text search
       const fullText = [
         article.title,
         article.summary,
@@ -376,6 +416,8 @@ class SecuritySearchEngine {
     return {
       total_results: results.length,
       query: query,
+      filters: filters,
+      since_date: since_date,
       case_sensitive: case_sensitive,
       whole_word: whole_word,
       results: limitedResults

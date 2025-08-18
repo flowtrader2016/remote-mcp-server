@@ -185,13 +185,21 @@ export default {
                 },
                 {
                   name: "search_full_text",
-                  description: "Search across ALL article text including title, summary, and full content. Use this when structured searches fail or to find ANY mention of a term (e.g., HSBC, ransomware). Returns same summary fields as query_articles PLUS relevance scores and highlighted snippets. Fields include: title, article_date, severity_level, summary, url, original_source_url.",
+                  description: "Search across ALL article text with optional filters. Combines full-text search with structured filtering (date, severity, etc). Use when structured searches fail or to find ANY mention of a term. Returns same fields as query_articles PLUS relevance scores and snippets.",
                   inputSchema: {
                     type: "object",
                     properties: {
                       query: {
                         type: "string",
                         description: "Search terms (e.g., 'HSBC', 'critical vulnerability', 'ransomware')"
+                      },
+                      filters: {
+                        type: "object",
+                        description: "Field-value pairs to filter by (same as query_articles). Values must be arrays."
+                      },
+                      since_date: {
+                        type: "string",
+                        description: "Filter articles published after this date (YYYY-MM-DD)"
                       },
                       case_sensitive: {
                         type: "boolean",
