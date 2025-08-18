@@ -194,7 +194,7 @@ class SecuritySearchEngine {
     // Return summary or full
     if (summary_mode) {
       return results.map(article => ({
-        id: article.id,
+        article_id: article.title,  // Use title as the identifier since articles don't have id field
         title: article.title,
         article_date: article.date_original || article.article_date,
         severity_level: article.severity_level,
@@ -206,7 +206,8 @@ class SecuritySearchEngine {
   }
   
   getArticleDetails(articleId) {
-    const article = this.articles.find(a => a.id === articleId);
+    // Articles use title as identifier, not id
+    const article = this.articles.find(a => a.title === articleId);
     if (!article) {
       throw new Error(`Article ${articleId} not found`);
     }

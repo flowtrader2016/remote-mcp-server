@@ -2,6 +2,12 @@
 
 A remote MCP server that provides access to 4000+ security articles with advanced search capabilities, deployed on Cloudflare Workers with Containers for high-performance search.
 
+## 🚨 CRITICAL: Docker Desktop MUST be Running!
+**Before ANY deployment or local testing, ensure Docker Desktop is running:**
+- Mac: Look for the whale icon in your menu bar (should be solid, not greyed out)
+- Windows: Check system tray for Docker whale icon
+- Linux: Run `docker ps` to verify Docker daemon is running
+
 ## Features
 
 - 🔍 **Advanced Search**: Query 4000+ security articles across 40+ fields
@@ -21,34 +27,78 @@ A remote MCP server that provides access to 4000+ security articles with advance
 
 ## Prerequisites
 
-### Required
-- ✅ **Docker Desktop** installed and **RUNNING** (containers won't deploy without it!)
-- ✅ **Cloudflare Workers Paid Plan** ($5/month minimum for containers)
-- ✅ **Node.js 18+** installed
-- ✅ **Wrangler CLI** (`npm install -g wrangler`)
+### ⚠️ MUST HAVE Before Starting
+1. **Docker Desktop** - [Download here](https://www.docker.com/products/docker-desktop/)
+   - ❌ **NOT OPTIONAL** - Deployment will fail without it
+   - ✅ Must be **RUNNING** (not just installed)
+   - 🔍 Verify: Docker whale icon visible in menu bar/system tray
+   
+2. **Cloudflare Workers Paid Plan** ($5/month)
+   - Free plan does NOT support containers
+   - Upgrade at: https://dash.cloudflare.com/?to=/:account/workers/plans
+   
+3. **Node.js 18+** - [Download here](https://nodejs.org/)
+   - Verify: `node --version` should show v18.0.0 or higher
+   
+4. **Wrangler CLI**
+   ```bash
+   npm install -g wrangler
+   wrangler --version  # Should show 3.0.0 or higher
+   ```
 
-### For Data Updates
+### For Data Updates Only
 - Python 3.x with conda environment
 - AWS credentials (for S3 source data)
 - R2 API credentials (see Data Refresh section)
 
 ## Setup & Installation
 
+### Step 0: Pre-flight Check ✈️
 ```bash
-# 1. Install dependencies
-npm install
-
-# 2. Login to Cloudflare
-npx wrangler login
-
-# 3. Upload metadata to R2 (creates bucket automatically)
-npm run setup
-
-# 4. Run locally for testing
-npm run dev
+# MUST pass ALL checks before proceeding:
+docker --version        # Docker version 20.10.0 or higher
+docker ps               # Should NOT error - Docker daemon must be running
+node --version          # v18.0.0 or higher
+npx wrangler --version  # 3.0.0 or higher
 ```
 
-You should be able to open [`http://localhost:8787/`](http://localhost:8787/) in your browser
+### Step 1: Clone and Install
+```bash
+git clone <your-repo-url>
+cd remote-mcp-server
+npm install
+```
+
+### Step 2: Authenticate with Cloudflare
+```bash
+npx wrangler login
+# This opens a browser - click "Allow" to authenticate
+```
+
+### Step 3: Create R2 Bucket and Upload Data
+```bash
+# This creates the R2 bucket and uploads initial data
+npm run setup
+
+# Expected output:
+# ✅ Creating R2 bucket 'security-article-search-data'...
+# ✅ Uploading search_metadata.json...
+# ✅ Setup complete!
+```
+
+### Step 4: Test Locally (Optional but Recommended)
+```bash
+npm run dev
+
+# Expected output:
+# ⛅️ wrangler 3.x.x
+# Your worker has access to the following bindings:
+# - R2 Bucket: SEARCH_DATA
+# - Durable Object: MCP_CONTAINER
+# [mf:inf] Ready on http://localhost:8787/
+```
+
+Open [`http://localhost:8787/`](http://localhost:8787/) in your browser - you should see a green "✅ Server Running" status.
 
 ## Connect the MCP inspector to your server
 
@@ -101,25 +151,64 @@ When you open Claude a browser window should open and allow you to login. You sh
 
 ## Deploy to Cloudflare
 
-### Pre-deployment Checklist
-- [ ] Docker Desktop is **running** (check the whale icon in your menu bar)
-- [ ] You have Workers Paid plan active ($5/month)
-- [ ] You're logged in: `npx wrangler login`
-- [ ] R2 bucket has data: `npm run upload-data`
+### 🔴 STOP! Pre-deployment Checklist
+**ALL items must be checked before deploying:**
 
-### Deploy Command (ONE command!)
 ```bash
+# Run this checklist script:
+echo "Checking deployment requirements..."
+
+# 1. Docker running?
+docker ps > /dev/null 2>&1 && echo "✅ Docker is running" || echo "❌ Docker NOT running - START IT NOW!"
+
+# 2. Logged into Cloudflare?
+npx wrangler whoami > /dev/null 2>&1 && echo "✅ Logged into Cloudflare" || echo "❌ Not logged in - Run: npx wrangler login"
+
+# 3. On paid plan? (Manual check)
+echo "⚠️  Manual check: Verify Workers Paid plan at https://dash.cloudflare.com/?to=/:account/workers/plans"
+
+# 4. R2 bucket exists?
+npx wrangler r2 bucket list 2>/dev/null | grep -q "security-article-search-data" && echo "✅ R2 bucket exists" || echo "❌ R2 bucket missing - Run: npm run setup"
+```
+
+### Deploy Command
+```bash
+# ONLY run this after ALL checks pass:
 npm run deploy
 ```
 
-This will:
-1. Build the Docker container image
-2. Push it to Cloudflare's registry
-3. Deploy the Worker with container support
-4. Output your URL: `https://remote-mcp-server.<your-account>.workers.dev`
+### What Happens During Deployment
 
-### First Deployment Note
-The first deployment takes ~2-3 minutes as it builds and uploads the Docker image. Subsequent deployments are faster (~30 seconds).
+1. **Building Container** (~60 seconds)
+   ```
+   🔨 Building container image...
+   [+] Building 45.2s (8/8) FINISHED
+   ```
+
+2. **Pushing to Registry** (~30 seconds)
+   ```
+   📤 Pushing to Cloudflare registry...
+   The push refers to repository [registry.cloudflare.com/...]
+   ```
+
+3. **Deploying Worker** (~20 seconds)
+   ```
+   🚀 Deploying Worker with container support...
+   Uploaded remote-mcp-server (X sec)
+   Published remote-mcp-server (Y sec)
+   ```
+
+4. **Success Output**
+   ```
+   ✅ Deployment complete!
+   🌍 Your MCP server is live at:
+   https://remote-mcp-server.<your-account>.workers.dev
+   ```
+
+### ⏱️ Deployment Times
+- **First deployment**: 2-3 minutes (builds and uploads Docker image)
+- **Subsequent deployments**: 30-45 seconds (uses cached image)
+- **Container cold start**: 10-30 seconds (after 10 min idle)
 
 ## Call your newly deployed remote MCP server from a remote MCP client
 
@@ -156,42 +245,109 @@ Update the Claude configuration file to point to your `workers.dev` URL and rest
 
 ## Troubleshooting
 
-### Container won't deploy
-**Error**: "The Docker CLI could not be launched"
-- **Solution**: Start Docker Desktop first! The whale icon should be in your menu bar.
+### 🔴 Deployment Failures
 
-**Error**: "Container is not responding"
-- **Cause**: Container is sleeping (happens after 10 min idle)
-- **Solution**: Retry the request - container wakes up in 10-30 seconds
-
-### Tools hanging/timeout
-- **First request after idle**: Container needs 10-30 seconds to wake up
-- **Solution**: Just retry - second request should work
-
-### Migration errors
-**Error**: "Cannot apply migration..."
-- **Solution**: Already fixed in current setup, but if it happens:
-  ```bash
-  # Increment the migration version in wrangler.jsonc
-  # Change v8 to v9, v10, etc.
-  ```
-
-### Check deployment status
+#### "The Docker CLI could not be launched"
 ```bash
-# View logs
-npx wrangler tail
-
-# Test locally
-npm run dev
-
-# Check container status in dashboard
-open https://dash.cloudflare.com
+# CAUSE: Docker Desktop not running
+# FIX:
+1. Start Docker Desktop application
+2. Wait for whale icon to appear in menu bar
+3. Run: docker ps  # Should work without error
+4. Retry deployment: npm run deploy
 ```
 
-### Reset everything
-If all else fails:
+#### "workers.dev subdomain not available"
 ```bash
-# 1. Make sure Docker is running
-# 2. Clean deploy
+# CAUSE: Need to set up workers.dev subdomain
+# FIX:
+npx wrangler subdomain
+# Enter a unique subdomain when prompted
+```
+
+#### "Unauthorized" or "Authentication error"
+```bash
+# CAUSE: Not logged into Cloudflare
+# FIX:
+npx wrangler logout
+npx wrangler login
+# Click "Allow" in browser
 npm run deploy
 ```
+
+#### "Resource limit exceeded" or "Containers not available"
+```bash
+# CAUSE: Not on Workers Paid plan
+# FIX:
+1. Go to: https://dash.cloudflare.com/?to=/:account/workers/plans
+2. Upgrade to Workers Paid ($5/month)
+3. Wait 2-3 minutes for plan to activate
+4. Retry: npm run deploy
+```
+
+### 🟡 Runtime Issues
+
+#### Container Sleeping (10+ min idle)
+```bash
+# SYMPTOM: First request times out after idle period
+# BEHAVIOR: Container sleeps after 10 min, takes 10-30s to wake
+# FIX: Just retry - second request will work
+```
+
+#### "Container is not responding"
+```bash
+# CAUSE: Container crashed or in bad state
+# FIX:
+1. Check logs: npx wrangler tail
+2. Restart by redeploying: npm run deploy
+```
+
+#### Tools Hanging in Claude Desktop
+```bash
+# CAUSE: Usually container waking up from sleep
+# FIX:
+1. Wait 30 seconds
+2. Try the tool again
+3. If still hanging, check logs: npx wrangler tail
+```
+
+### 🟢 Debugging Commands
+
+```bash
+# View real-time logs
+npx wrangler tail
+
+# Test container health
+curl https://remote-mcp-server.<your-account>.workers.dev/health
+
+# Check R2 bucket
+npx wrangler r2 bucket list
+npx wrangler r2 object list security-article-search-data
+
+# Test locally (bypass deployment issues)
+npm run dev
+# Then: curl http://localhost:8787/health
+```
+
+### 🔄 Nuclear Reset (Last Resort)
+
+```bash
+# Complete reset and redeploy
+1. docker ps  # Ensure Docker is running
+2. npx wrangler logout && npx wrangler login
+3. npm run clean  # Clean build artifacts
+4. npm install    # Reinstall dependencies  
+5. npm run setup  # Recreate R2 bucket
+6. npm run deploy # Fresh deployment
+```
+
+### 📊 Common Error Patterns
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| "Docker CLI could not be launched" | Docker not running | Start Docker Desktop |
+| "Unauthorized" | Not logged in | `npx wrangler login` |
+| "Resource limit exceeded" | Free plan | Upgrade to paid plan |
+| "Container is not responding" | Container sleeping | Retry after 30s |
+| "Migration error" | Version conflict | Increment migration version |
+| Tools timeout | Container cold start | Wait and retry |
