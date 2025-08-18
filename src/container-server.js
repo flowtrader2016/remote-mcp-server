@@ -160,15 +160,31 @@ class SecuritySearchEngine {
     // Apply date filter
     if (since_date) {
       results = results.filter(article => {
-        if (!article.article_date) return false;
-        return article.article_date >= since_date;
+        // Try date_original first (cleaner data), then article_date
+        const dateValue = article.date_original || article.article_date;
+        
+        if (!dateValue) return false;
+        
+        // Skip invalid date formats
+        if (dateValue === 'YYYYMMDD' || dateValue.includes('২০')) {
+          return false; // Exclude articles with bad dates
+        }
+        
+        try {
+          // Extract just the date part if there's time info
+          const datePart = dateValue.split(' ')[0];
+          return datePart >= since_date;
+        } catch (e) {
+          // If date comparison fails, exclude the article
+          return false;
+        }
       });
     }
     
     // Sort by date (newest first)
     results.sort((a, b) => {
-      const dateA = a.article_date || '0000-00-00';
-      const dateB = b.article_date || '0000-00-00';
+      const dateA = (a.date_original || a.article_date || '0000-00-00').split(' ')[0];
+      const dateB = (b.date_original || b.article_date || '0000-00-00').split(' ')[0];
       return dateB.localeCompare(dateA);
     });
     
@@ -180,7 +196,7 @@ class SecuritySearchEngine {
       return results.map(article => ({
         id: article.id,
         title: article.title,
-        article_date: article.article_date,
+        article_date: article.date_original || article.article_date,
         severity_level: article.severity_level,
         summary: article.summary || article.description?.substring(0, 200)
       }));
