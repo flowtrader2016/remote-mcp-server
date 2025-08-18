@@ -2,15 +2,10 @@
 
 A remote MCP server that provides access to 4000+ security articles with advanced search capabilities, deployed on Cloudflare Workers with Containers for high-performance search.
 
-## 🚨 CRITICAL: Docker Desktop MUST be Running!
-**Before ANY deployment or local testing, ensure Docker Desktop is running:**
-- Mac: Look for the whale icon in your menu bar (should be solid, not greyed out)
-- Windows: Check system tray for Docker whale icon
-- Linux: Run `docker ps` to verify Docker daemon is running
-
 ## Features
 
-- 🔍 **Advanced Search**: Query 4000+ security articles across 40+ fields
+- 🔍 **Full-Text Search**: Search across all article content, not just structured fields
+- 📊 **Advanced Filtering**: Query 4000+ security articles across 40+ fields
 - 🚀 **Container-based**: 4GB memory containers for fast search performance
 - ☁️ **Cloudflare R2 Storage**: Efficient storage for large metadata
 - 💰 **Cost-effective**: Runs on Workers Paid plan ($5/month)
@@ -18,32 +13,28 @@ A remote MCP server that provides access to 4000+ security articles with advance
 
 ## Available Tools
 
-1. **`get_workflow_instructions`** - START HERE! Learn the correct 3-step workflow
-2. **`show_searchable_fields`** - Discover all searchable fields
-3. **`get_field_values`** - Get exact field values for filtering
-4. **`query_articles`** - Search articles with complex filters
-5. **`get_article_details`** - Get full article information
-6. **`show_field_values`** - Compatibility alias for field values
+1. **`get_workflow_instructions`** - START HERE! Learn the correct workflow for searching
+2. **`show_searchable_fields`** - Discover all 40+ searchable fields and categories
+3. **`get_field_values`** - Get exact values for any field (required for accurate filtering)
+4. **`query_articles`** - Search articles using structured field filters
+5. **`search_full_text`** - Search across ALL article text (titles, summaries, full content)
+6. **`get_article_details`** - Get complete article information by ID
+7. **`show_field_values`** - Alias for get_field_values (compatibility)
 
 ## Prerequisites
 
-### ⚠️ MUST HAVE Before Starting
 1. **Docker Desktop** - [Download here](https://www.docker.com/products/docker-desktop/)
-   - ❌ **NOT OPTIONAL** - Deployment will fail without it
-   - ✅ Must be **RUNNING** (not just installed)
-   - 🔍 Verify: Docker whale icon visible in menu bar/system tray
+   - Must be running for deployment (check whale icon in menu bar)
    
 2. **Cloudflare Workers Paid Plan** ($5/month)
    - Free plan does NOT support containers
    - Upgrade at: https://dash.cloudflare.com/?to=/:account/workers/plans
    
-3. **Node.js 18+** - [Download here](https://nodejs.org/)
-   - Verify: `node --version` should show v18.0.0 or higher
-   
-4. **Wrangler CLI**
+3. **Node.js 18+** and **Wrangler CLI**
    ```bash
+   node --version       # Should show v18.0.0 or higher
    npm install -g wrangler
-   wrangler --version  # Should show 3.0.0 or higher
+   wrangler --version   # Should show 3.0.0 or higher
    ```
 
 ### For Data Updates Only
@@ -224,10 +215,7 @@ You've now connected to your MCP server from a remote MCP client.
 
 Update the Claude configuration file to point to your `workers.dev` URL and restart Claude.
 
-**IMPORTANT**: 
-- Use `mcp-remote` (NOT `@cloudflare/mcp-server-cloudflare`)
-- Replace `your-account` with your actual Cloudflare account name
-- Remove any local Python MCP configs to avoid duplicate tools
+**IMPORTANT**: Replace `your-account` with your actual Cloudflare account name
 
 ```json
 {
@@ -242,6 +230,46 @@ Update the Claude configuration file to point to your `workers.dev` URL and rest
   }
 }
 ```
+
+## Search Capabilities
+
+### Structured Search (`query_articles`)
+Search using exact field values:
+```javascript
+// Find critical AWS vulnerabilities from last month
+{
+  "filters": {
+    "severity_level": ["Critical"],
+    "cloud_platforms": ["AWS"]
+  },
+  "since_date": "2024-11-01",
+  "limit": 20
+}
+```
+
+### Full-Text Search (`search_full_text`)
+Search across all article content when entities aren't in structured fields:
+```javascript
+// Find any mention of HSBC in articles
+{
+  "query": "HSBC",
+  "since_date": "2024-10-01",
+  "limit": 30
+}
+
+// Combine text search with filters
+{
+  "query": "ransomware",
+  "filters": {
+    "severity_level": ["Critical", "High"]
+  }
+}
+```
+
+### Why Two Search Methods?
+- **Structured search** is precise but only finds exact matches in specific fields
+- **Full-text search** finds ANY mention anywhere in articles (e.g., HSBC mentioned in breach articles but not listed as affected organization)
+- Use both for comprehensive results
 
 ## Troubleshooting
 
