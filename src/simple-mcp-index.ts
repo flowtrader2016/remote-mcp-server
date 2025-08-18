@@ -185,7 +185,7 @@ export default {
                 },
                 {
                   name: "search_full_text",
-                  description: "Search across ALL article text including title, summary, and full content. Use this when structured searches fail or to find ANY mention of a term (e.g., HSBC, ransomware). Returns snippets with highlighted matches.",
+                  description: "Search across ALL article text including title, summary, and full content. Use this when structured searches fail or to find ANY mention of a term (e.g., HSBC, ransomware). Returns same summary fields as query_articles PLUS relevance scores and highlighted snippets. Fields include: title, article_date, severity_level, summary, url, original_source_url.",
                   inputSchema: {
                     type: "object",
                     properties: {

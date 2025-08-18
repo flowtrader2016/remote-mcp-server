@@ -320,14 +320,15 @@ class SecuritySearchEngine {
       return {
         article_id: article.title,
         title: article.title,
-        date: article.date_original || article.article_date,
+        article_date: article.date_original || article.article_date,
+        severity_level: article.severity_level,
+        summary: article.summary || article.description?.substring(0, 200),
+        url: article.url,
+        original_source_url: article.original_source_url,
         relevance_score: relevanceScore,
         match_count: matchCount,
         matched_in: matchedIn,
-        snippet: bestSnippet,
-        url: article.url,
-        original_source_url: article.original_source_url,
-        severity_level: article.severity_level
+        snippet: bestSnippet
       };
     };
     
