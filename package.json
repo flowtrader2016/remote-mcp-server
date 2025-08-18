@@ -4,9 +4,7 @@
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
-		"deploy:container": "./deploy-container.sh",
 		"dev": "wrangler dev",
-		"dev:container": "wrangler dev --config wrangler-container.jsonc",
 		"format": "biome format --write",
 		"lint:fix": "biome lint --fix",
 		"start": "wrangler dev",

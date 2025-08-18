@@ -1,26 +1,36 @@
 # Security Article Search MCP Server on Cloudflare
 
-A remote MCP server that provides access to 4000+ security articles with advanced search capabilities, deployed on Cloudflare Workers with OAuth authentication.
+A remote MCP server that provides access to 4000+ security articles with advanced search capabilities, deployed on Cloudflare Workers with Containers for high-performance search.
 
 ## Features
 
 - 🔍 **Advanced Search**: Query 4000+ security articles across 40+ fields
-- 🛡️ **OAuth Authentication**: Secure access with Cloudflare OAuth Provider  
+- 🚀 **Container-based**: 4GB memory containers for fast search performance
 - ☁️ **Cloudflare R2 Storage**: Efficient storage for large metadata
-- 🚀 **6 Powerful Tools**:
-  - `get_workflow_instructions`: Learn the correct search workflow
-  - `show_searchable_fields`: Discover all searchable fields
-  - `get_field_values`: Get exact field values for filtering
-  - `query_articles`: Search articles with complex filters
-  - `get_article_details`: Get full article information
-  - `show_field_values`: Compatibility alias for field values
+- 💰 **Cost-effective**: Runs on Workers Paid plan ($5/month)
+- 🛡️ **Secure**: Direct R2 access via Worker bindings
+
+## Available Tools
+
+1. **`get_workflow_instructions`** - START HERE! Learn the correct 3-step workflow
+2. **`show_searchable_fields`** - Discover all searchable fields
+3. **`get_field_values`** - Get exact field values for filtering
+4. **`query_articles`** - Search articles with complex filters
+5. **`get_article_details`** - Get full article information
+6. **`show_field_values`** - Compatibility alias for field values
 
 ## Prerequisites
 
-- Node.js 18+ installed
-- Cloudflare account with Workers and R2 enabled
-- Wrangler CLI (`npm install -g wrangler`)
-- The original `search_metadata.json` file from your Python MCP
+### Required
+- ✅ **Docker Desktop** installed and **RUNNING** (containers won't deploy without it!)
+- ✅ **Cloudflare Workers Paid Plan** ($5/month minimum for containers)
+- ✅ **Node.js 18+** installed
+- ✅ **Wrangler CLI** (`npm install -g wrangler`)
+
+### For Data Updates
+- Python 3.x with conda environment
+- AWS credentials (for S3 source data)
+- R2 API credentials (see Data Refresh section)
 
 ## Setup & Installation
 
@@ -91,19 +101,25 @@ When you open Claude a browser window should open and allow you to login. You sh
 
 ## Deploy to Cloudflare
 
+### Pre-deployment Checklist
+- [ ] Docker Desktop is **running** (check the whale icon in your menu bar)
+- [ ] You have Workers Paid plan active ($5/month)
+- [ ] You're logged in: `npx wrangler login`
+- [ ] R2 bucket has data: `npm run upload-data`
+
+### Deploy Command (ONE command!)
 ```bash
-# 1. Create KV namespace for OAuth (if not already created)
-npx wrangler kv namespace create OAUTH_KV
-# Update the ID in wrangler.jsonc if needed
-
-# 2. Ensure R2 bucket exists and data is uploaded
-npm run upload-data
-
-# 3. Deploy to Cloudflare Workers
 npm run deploy
 ```
 
-After deployment, you'll receive a URL like: `https://security-article-search-mcp.<your-subdomain>.workers.dev`
+This will:
+1. Build the Docker container image
+2. Push it to Cloudflare's registry
+3. Deploy the Worker with container support
+4. Output your URL: `https://remote-mcp-server.<your-account>.workers.dev`
+
+### First Deployment Note
+The first deployment takes ~2-3 minutes as it builds and uploads the Docker image. Subsequent deployments are faster (~30 seconds).
 
 ## Call your newly deployed remote MCP server from a remote MCP client
 
@@ -138,17 +154,44 @@ Update the Claude configuration file to point to your `workers.dev` URL and rest
 }
 ```
 
-## Debugging
+## Troubleshooting
 
-Should anything go wrong it can be helpful to restart Claude, or to try connecting directly to your
-MCP server on the command line with the following command.
+### Container won't deploy
+**Error**: "The Docker CLI could not be launched"
+- **Solution**: Start Docker Desktop first! The whale icon should be in your menu bar.
 
+**Error**: "Container is not responding"
+- **Cause**: Container is sleeping (happens after 10 min idle)
+- **Solution**: Retry the request - container wakes up in 10-30 seconds
+
+### Tools hanging/timeout
+- **First request after idle**: Container needs 10-30 seconds to wake up
+- **Solution**: Just retry - second request should work
+
+### Migration errors
+**Error**: "Cannot apply migration..."
+- **Solution**: Already fixed in current setup, but if it happens:
+  ```bash
+  # Increment the migration version in wrangler.jsonc
+  # Change v8 to v9, v10, etc.
+  ```
+
+### Check deployment status
 ```bash
-npx mcp-remote http://localhost:8787/sse
+# View logs
+npx wrangler tail
+
+# Test locally
+npm run dev
+
+# Check container status in dashboard
+open https://dash.cloudflare.com
 ```
 
-In some rare cases it may help to clear the files added to `~/.mcp-auth`
-
+### Reset everything
+If all else fails:
 ```bash
-rm -rf ~/.mcp-auth
+# 1. Make sure Docker is running
+# 2. Clean deploy
+npm run deploy
 ```

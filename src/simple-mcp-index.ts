@@ -98,8 +98,16 @@ export default {
             result: {
               tools: [
                 {
+                  name: "get_workflow_instructions",
+                  description: "START HERE - Get the correct workflow for searching security articles. Returns mandatory 3-step process that prevents failed searches.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {}
+                  }
+                },
+                {
                   name: "show_searchable_fields",
-                  description: "Show all searchable fields and their descriptions",
+                  description: "STEP 1: Discover all 40+ searchable fields in the database. Use this to understand what data is available for querying.",
                   inputSchema: {
                     type: "object",
                     properties: {}
@@ -107,7 +115,7 @@ export default {
                 },
                 {
                   name: "get_field_values",
-                  description: "Get all unique values for a specific field",
+                  description: "STEP 2: Get EXACT values for any field you want to filter on. Critical: Values are case-sensitive! Always use this before querying.",
                   inputSchema: {
                     type: "object",
                     properties: {
@@ -121,18 +129,27 @@ export default {
                 },
                 {
                   name: "query_articles",
-                  description: "Search for security articles using field filters",
+                  description: "STEP 3: Search articles using exact values from step 2. Filters must use arrays even for single values, e.g., {'severity_level': ['Critical']}",
                   inputSchema: {
                     type: "object",
                     properties: {
                       filters: {
                         type: "object",
-                        description: "Field-value pairs to filter by"
+                        description: "Field-value pairs to filter by. Values must be arrays."
                       },
                       limit: {
                         type: "number",
                         description: "Maximum number of results (default 10)",
                         default: 10
+                      },
+                      since_date: {
+                        type: "string",
+                        description: "Filter articles published after this date (YYYY-MM-DD)"
+                      },
+                      summary_mode: {
+                        type: "boolean",
+                        description: "Return summaries only (default true)",
+                        default: true
                       }
                     },
                     required: ["filters"]
@@ -140,7 +157,7 @@ export default {
                 },
                 {
                   name: "get_article_details",
-                  description: "Get full details of a specific article by ID",
+                  description: "Get full details of a specific article by ID (from query results)",
                   inputSchema: {
                     type: "object",
                     properties: {
@@ -150,6 +167,20 @@ export default {
                       }
                     },
                     required: ["article_id"]
+                  }
+                },
+                {
+                  name: "show_field_values",
+                  description: "Alias for get_field_values - Get EXACT values for a field (for compatibility)",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      field: {
+                        type: "string",
+                        description: "The field name to get values for"
+                      }
+                    },
+                    required: ["field"]
                   }
                 }
               ]
@@ -240,6 +271,70 @@ export default {
             }
           }
           
+          // Handle get_workflow_instructions without calling container
+          if (name === "get_workflow_instructions") {
+            const workflowInstructions = {
+              workflow: "MANDATORY 3-STEP WORKFLOW - DO NOT SKIP",
+              steps: [
+                {
+                  step: 1,
+                  tool: "show_searchable_fields()",
+                  purpose: "Discover available fields and categories",
+                  required: true
+                },
+                {
+                  step: 2,
+                  tool: "get_field_values('field_name')",
+                  purpose: "Get EXACT values for any field you want to filter on",
+                  note: "Case-sensitive! Use exact strings returned",
+                  required: true
+                },
+                {
+                  step: 3,
+                  tool: "query_articles(filters={...})",
+                  purpose: "Use exact values from step 2",
+                  example: '{"severity_level": ["Critical"], "cloud_platforms": ["AWS"]}',
+                  note: "Filter values MUST be arrays, even for single values",
+                  required: true
+                }
+              ],
+              critical_warning: "⚠️ Guessing field values will fail. Always use step 2 to get exact values.",
+              example_sequence: {
+                user_request: "Find critical AWS ransomware issues",
+                assistant_actions: [
+                  "1. show_searchable_fields() → see all fields",
+                  "2. get_field_values('severity_level') → get ['Critical', 'High', ...]",
+                  "3. get_field_values('cloud_platforms') → get ['AWS', 'Azure', ...]",
+                  "4. get_field_values('threat_types') → get ['Ransomware', 'Malware', ...]",
+                  "5. query_articles(filters={'severity_level':['Critical'], 'cloud_platforms':['AWS'], 'threat_types':['Ransomware']})"
+                ]
+              },
+              common_mistakes: [
+                "Skipping step 1 - leads to unknown field errors",
+                "Guessing values instead of using step 2 - leads to no results",
+                "Wrong case - 'critical' vs 'Critical'",
+                "Passing string instead of array - 'AI' vs ['AI']",
+                "Using non-existent parameters - only use filters, since_date, limit, summary_mode"
+              ],
+              next_step: "Run show_searchable_fields() to begin"
+            };
+            
+            return new Response(JSON.stringify({
+              jsonrpc: "2.0",
+              id: body.id,
+              result: {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify(workflowInstructions, null, 2)
+                  }
+                ]
+              }
+            }), {
+              headers: { "Content-Type": "application/json" }
+            });
+          }
+          
           let containerResponse: Response;
           
           switch (name) {
@@ -248,6 +343,7 @@ export default {
               break;
               
             case "get_field_values":
+            case "show_field_values":  // Alias for compatibility
               containerResponse = await container.fetch(new Request(`http://container/get_field_values/${args.field}`));
               break;
               

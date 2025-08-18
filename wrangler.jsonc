@@ -1,35 +1,42 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "remote-mcp-server",
-	"main": "src/simple-mcp-index.ts",
-	"compatibility_date": "2025-03-10",
-	"compatibility_flags": ["nodejs_compat"],
-	"durable_objects": {
-		"bindings": [
-			{
-				"class_name": "MCPContainer",
-				"name": "MCP_CONTAINER"
-			}
-		]
-	},
-	"kv_namespaces": [
-		{
-			"binding": "OAUTH_KV",
-			"id": "99720aa2de0840859672e5f100163432"
-		}
-	],
-	"r2_buckets": [
-		{
-			"binding": "SEARCH_DATA",
-			"bucket_name": "security-article-search-data"
-		}
-	],
-	"observability": {
-		"enabled": true
-	},
-	"assets": { "directory": "./static/", "binding": "ASSETS" }
+  "name": "remote-mcp-server",
+  "main": "src/simple-mcp-index.ts",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  
+  // Container configuration
+  "containers": [
+    {
+      "class_name": "MCPContainer",
+      "image": "./Dockerfile",
+      "instance_type": "standard",  // 4GB memory
+      "max_instances": 5
+    }
+  ],
+  
+  // Durable Object for Container
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MCP_CONTAINER",
+        "class_name": "MCPContainer"
+      }
+    ]
+  },
+  
+  // Migration to clean up old classes
+  "migrations": [
+    {
+      "tag": "v8",
+      "renamed_classes": []
+    }
+  ],
+  
+  // R2 bucket
+  "r2_buckets": [
+    {
+      "binding": "SEARCH_DATA",
+      "bucket_name": "security-article-search-data"
+    }
+  ]
 }

@@ -27,8 +27,8 @@
   // Migration to clean up old classes
   "migrations": [
     {
-      "tag": "v6",
-      "deleted_classes": ["HybridMCP"]
+      "tag": "v8",
+      "renamed_classes": []
     }
   ],
   
