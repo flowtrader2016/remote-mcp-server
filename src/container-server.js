@@ -215,6 +215,171 @@ class SecuritySearchEngine {
     }
     return article;
   }
+  
+  searchFullText({ query, case_sensitive = false, whole_word = false, limit = 30, highlight = true }) {
+    if (!query || query.trim() === '') {
+      return { total_results: 0, query: query, results: [] };
+    }
+    
+    const results = [];
+    const searchTerm = case_sensitive ? query.trim() : query.trim().toLowerCase();
+    
+    // Helper function to escape regex special characters
+    const escapeRegex = (str) => {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+    
+    // Helper function to extract context around match
+    const extractContext = (text, query, contextLength = 200) => {
+      if (!text) return '';
+      
+      const searchIn = case_sensitive ? text : text.toLowerCase();
+      const searchFor = case_sensitive ? query : query.toLowerCase();
+      const index = searchIn.indexOf(searchFor);
+      
+      if (index === -1) return '';
+      
+      const start = Math.max(0, index - contextLength / 2);
+      const end = Math.min(text.length, index + searchFor.length + contextLength / 2);
+      let snippet = text.substring(start, end);
+      
+      // Add ellipsis if truncated
+      if (start > 0) snippet = '...' + snippet;
+      if (end < text.length) snippet = snippet + '...';
+      
+      // Highlight the match if requested
+      if (highlight) {
+        const regex = new RegExp(`(${escapeRegex(query)})`, case_sensitive ? 'g' : 'gi');
+        snippet = snippet.replace(regex, '<mark>$1</mark>');
+      }
+      
+      return snippet;
+    };
+    
+    // Score and format results
+    const scoreAndFormat = (article, matches) => {
+      let relevanceScore = 0;
+      let matchCount = 0;
+      const matchedIn = [];
+      let bestSnippet = '';
+      
+      // Check title (highest weight)
+      const title = article.title || '';
+      const titleCheck = case_sensitive ? title : title.toLowerCase();
+      if (titleCheck.includes(searchTerm)) {
+        relevanceScore += 10;
+        matchCount += (titleCheck.match(new RegExp(escapeRegex(searchTerm), 'g')) || []).length;
+        matchedIn.push('title');
+      }
+      
+      // Check summary (medium weight)
+      const summary = article.summary || '';
+      const summaryCheck = case_sensitive ? summary : summary.toLowerCase();
+      if (summaryCheck.includes(searchTerm)) {
+        relevanceScore += 5;
+        matchCount += (summaryCheck.match(new RegExp(escapeRegex(searchTerm), 'g')) || []).length;
+        matchedIn.push('summary');
+        if (!bestSnippet) {
+          bestSnippet = extractContext(summary, query);
+        }
+      }
+      
+      // Check main article text (lower weight)
+      const articleText = article.article_text_md_original || '';
+      const textCheck = case_sensitive ? articleText : articleText.toLowerCase();
+      if (textCheck.includes(searchTerm)) {
+        relevanceScore += 2;
+        matchCount += (textCheck.match(new RegExp(escapeRegex(searchTerm), 'g')) || []).length;
+        matchedIn.push('article_text');
+        if (!bestSnippet) {
+          bestSnippet = extractContext(articleText, query);
+        }
+      }
+      
+      // Check other fields
+      const otherFields = [
+        ...(article.affected_organizations || []),
+        ...(article.products_impacted || []),
+        ...(article.threat_actor_name || []),
+        ...(article.ciso_summary_key_points || []),
+        ...(article.lessons_learned || [])
+      ];
+      
+      const otherText = otherFields.join(' ');
+      const otherCheck = case_sensitive ? otherText : otherText.toLowerCase();
+      if (otherCheck.includes(searchTerm)) {
+        relevanceScore += 1;
+        if (!matchedIn.includes('other_fields')) {
+          matchedIn.push('other_fields');
+        }
+        if (!bestSnippet && otherText) {
+          bestSnippet = extractContext(otherText, query);
+        }
+      }
+      
+      return {
+        article_id: article.title,
+        title: article.title,
+        date: article.date_original || article.article_date,
+        relevance_score: relevanceScore,
+        match_count: matchCount,
+        matched_in: matchedIn,
+        snippet: bestSnippet,
+        url: article.url,
+        original_source_url: article.original_source_url,
+        severity_level: article.severity_level
+      };
+    };
+    
+    // Search through all articles
+    for (const article of this.articles) {
+      // Combine all searchable text fields
+      const fullText = [
+        article.title,
+        article.summary,
+        article.article_text_md_original,
+        article.ciso_summary_key_points ? article.ciso_summary_key_points.join(' ') : '',
+        article.lessons_learned ? article.lessons_learned.join(' ') : '',
+        article.affected_organizations ? article.affected_organizations.join(' ') : '',
+        article.products_impacted ? article.products_impacted.join(' ') : '',
+        article.threat_actor_name ? article.threat_actor_name.join(' ') : ''
+      ].filter(Boolean).join(' ');
+      
+      const compareText = case_sensitive ? fullText : fullText.toLowerCase();
+      
+      let matches = false;
+      
+      if (whole_word) {
+        // Use word boundary regex for whole word matching
+        const regex = new RegExp(`\\b${escapeRegex(searchTerm)}\\b`, case_sensitive ? 'g' : 'gi');
+        matches = regex.test(fullText);
+      } else {
+        // Simple substring search
+        matches = compareText.includes(searchTerm);
+      }
+      
+      if (matches) {
+        const result = scoreAndFormat(article, { query, case_sensitive, whole_word });
+        if (result.relevance_score > 0) {
+          results.push(result);
+        }
+      }
+    }
+    
+    // Sort by relevance score (highest first)
+    results.sort((a, b) => b.relevance_score - a.relevance_score);
+    
+    // Apply limit
+    const limitedResults = results.slice(0, limit);
+    
+    return {
+      total_results: results.length,
+      query: query,
+      case_sensitive: case_sensitive,
+      whole_word: whole_word,
+      results: limitedResults
+    };
+  }
 }
 
 // Express middleware
@@ -305,6 +470,17 @@ app.get('/get_article_details/:id', async (req, res) => {
     const engine = new SecuritySearchEngine(metadata);
     const article = engine.getArticleDetails(req.params.id);
     res.json(article);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/search_full_text', async (req, res) => {
+  try {
+    const metadata = await loadMetadata();
+    const engine = new SecuritySearchEngine(metadata);
+    const results = engine.searchFullText(req.body);
+    res.json(results);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

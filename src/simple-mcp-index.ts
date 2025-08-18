@@ -182,6 +182,40 @@ export default {
                     },
                     required: ["field"]
                   }
+                },
+                {
+                  name: "search_full_text",
+                  description: "Search across ALL article text including title, summary, and full content. Use this when structured searches fail or to find ANY mention of a term (e.g., HSBC, ransomware). Returns snippets with highlighted matches.",
+                  inputSchema: {
+                    type: "object",
+                    properties: {
+                      query: {
+                        type: "string",
+                        description: "Search terms (e.g., 'HSBC', 'critical vulnerability', 'ransomware')"
+                      },
+                      case_sensitive: {
+                        type: "boolean",
+                        description: "Match exact case (default: false)",
+                        default: false
+                      },
+                      whole_word: {
+                        type: "boolean",
+                        description: "Match whole words only (default: false)",
+                        default: false
+                      },
+                      limit: {
+                        type: "number",
+                        description: "Maximum results to return (default: 30)",
+                        default: 30
+                      },
+                      highlight: {
+                        type: "boolean",
+                        description: "Highlight matches in snippets with <mark> tags (default: true)",
+                        default: true
+                      }
+                    },
+                    required: ["query"]
+                  }
                 }
               ]
             }
@@ -358,6 +392,14 @@ export default {
               
             case "get_article_details":
               containerResponse = await container.fetch(new Request(`http://container/get_article_details/${args.article_id}`));
+              break;
+              
+            case "search_full_text":
+              containerResponse = await container.fetch(new Request("http://container/search_full_text", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(args)
+              }));
               break;
               
             default:
