@@ -144,8 +144,6 @@ class SecuritySearchEngine {
   searchArticles({ filters = {}, since_date = null, limit = 30, summary_mode = true }) {
     let results = [...this.articles];
     
-    console.log(`searchArticles called with since_date: ${since_date}, type: ${typeof since_date}`);
-    
     // Apply filters
     Object.entries(filters).forEach(([field, values]) => {
       if (values && values.length > 0) {
@@ -161,37 +159,26 @@ class SecuritySearchEngine {
     
     // Apply date filter
     if (since_date) {
-      const beforeCount = results.length;
       results = results.filter(article => {
         // Try date_original first (cleaner data), then article_date
         const dateValue = article.date_original || article.article_date;
         
-        if (!dateValue) {
-          console.log(`No date for article: ${article.title?.substring(0, 30)}`);
-          return false;
-        }
+        if (!dateValue) return false;
         
         // Skip invalid date formats
-        if (dateValue === 'YYYYMMDD' || dateValue.includes('২০')) {
-          console.log(`Bad date format: ${dateValue} for ${article.title?.substring(0, 30)}`);
+        if (dateValue === 'YYYYMMDD' || dateValue.includes('২０')) {
           return false; // Exclude articles with bad dates
         }
         
         try {
           // Extract just the date part if there's time info
           const datePart = dateValue.split(' ')[0];
-          const passes = datePart >= since_date;
-          if (article.article_date === 'YYYYMMDD') {
-            console.log(`YYYYMMDD article: date_original=${article.date_original}, datePart=${datePart}, since_date=${since_date}, passes=${passes}`);
-          }
-          return passes;
+          return datePart >= since_date;
         } catch (e) {
           // If date comparison fails, exclude the article
-          console.log(`Date comparison error: ${e.message}`);
           return false;
         }
       });
-      console.log(`Date filter applied: ${beforeCount} -> ${results.length} articles`);
     }
     
     // Sort by date (newest first)
