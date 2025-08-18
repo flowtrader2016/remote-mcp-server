@@ -129,7 +129,7 @@ export default {
                 },
                 {
                   name: "query_articles",
-                  description: "STEP 3: Search articles using exact values from step 2. Filters must use arrays even for single values, e.g., {'severity_level': ['Critical']}",
+                  description: "STEP 3: Search articles using exact values from step 2. Returns article summaries WITH URLs. Filters must use arrays even for single values, e.g., {'severity_level': ['Critical']}. Summary includes: title, date, severity, summary, url, and original_source_url.",
                   inputSchema: {
                     type: "object",
                     properties: {
@@ -307,7 +307,8 @@ export default {
                   "3. get_field_values('cloud_platforms') → get ['AWS', 'Azure', ...]",
                   "4. get_field_values('threat_types') → get ['Ransomware', 'Malware', ...]",
                   "5. query_articles(filters={'severity_level':['Critical'], 'cloud_platforms':['AWS'], 'threat_types':['Ransomware']})"
-                ]
+                ],
+                response_includes: "Each article includes: title, date, severity, summary, url (article link), original_source_url (source link)"
               },
               common_mistakes: [
                 "Skipping step 1 - leads to unknown field errors",

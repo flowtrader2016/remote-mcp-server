@@ -198,7 +198,9 @@ class SecuritySearchEngine {
         title: article.title,
         article_date: article.date_original || article.article_date,
         severity_level: article.severity_level,
-        summary: article.summary || article.description?.substring(0, 200)
+        summary: article.summary || article.description?.substring(0, 200),
+        url: article.url,
+        original_source_url: article.original_source_url
       }));
     }
     
