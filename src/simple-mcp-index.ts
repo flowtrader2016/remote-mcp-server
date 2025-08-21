@@ -8,14 +8,14 @@ export class MCPContainer extends Container {
   defaultPort = 3000;
   sleepAfter = "10m";
   instanceType = "standard";  // 4GB memory
-  
+
   environment = {
     R2_PUBLIC_URL: "https://pub-7e17005f86444e028bc6c091baa4e227.r2.dev"
   };
 }
 
 // Export with both names for compatibility
-export class MCP_CONTAINER extends MCPContainer {}
+export class MCP_CONTAINER extends MCPContainer { }
 
 /**
  * Simple MCP implementation that handles HTTP streaming
@@ -23,27 +23,27 @@ export class MCP_CONTAINER extends MCPContainer {}
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    
+
     // Health check endpoint
     if (url.pathname === "/health") {
       try {
         // Get container instance through Durable Object stub
         const id = env.MCP_CONTAINER.idFromName("singleton");
         const container = env.MCP_CONTAINER.get(id);
-        
+
         // Just check container health without loading data
         const containerHealth = await container.fetch(new Request("http://container/health"));
         const healthData = await containerHealth.json();
-        return new Response(JSON.stringify({ 
-          status: "ok", 
+        return new Response(JSON.stringify({
+          status: "ok",
           worker: true,
           container: healthData
         }), {
           headers: { "Content-Type": "application/json" }
         });
       } catch (error) {
-        return new Response(JSON.stringify({ 
-          status: "ok", 
+        return new Response(JSON.stringify({
+          status: "ok",
           worker: true,
           container: { status: "error", message: String(error) }
         }), {
@@ -51,7 +51,7 @@ export default {
         });
       }
     }
-    
+
     // SSE endpoint for MCP - handle as HTTP streaming
     if (url.pathname === "/sse" && request.method === "POST") {
       // Skip auth for testing
@@ -59,13 +59,13 @@ export default {
       // if (!user) {
       //   return new Response("Unauthorized", { status: 401 });
       // }
-      
+
       try {
         const body = await request.json();
         // Get container instance through Durable Object stub
         const id = env.MCP_CONTAINER.idFromName("singleton");
         const container = env.MCP_CONTAINER.get(id);
-        
+
         // Handle MCP protocol messages
         if (body.method === "initialize") {
           const response = {
@@ -82,15 +82,15 @@ export default {
               }
             }
           };
-          
+
           return new Response(JSON.stringify(response), {
-            headers: { 
+            headers: {
               "Content-Type": "application/json",
               "Transfer-Encoding": "chunked"
             }
           });
         }
-        
+
         if (body.method === "tools/list") {
           const response = {
             jsonrpc: "2.0",
@@ -99,7 +99,7 @@ export default {
               tools: [
                 {
                   name: "get_workflow_instructions",
-                  description: "START HERE - Get the correct workflow for searching security articles. Returns mandatory 3-step process that prevents failed searches.",
+                  description: "START HERE - Get the correct workflow for searching security articles. Returns mandatory 3-step process that prevents failed searches.  Can skip if given specific tools to use by user.",
                   inputSchema: {
                     type: "object",
                     properties: {}
@@ -157,13 +157,13 @@ export default {
                 },
                 {
                   name: "get_article_details",
-                  description: "Get full details of a specific article by ID (from query results)",
+                  description: "Get full details of a specific article by its title/ID. Use the exact 'title' field value from query_articles results as the article_id parameter.",
                   inputSchema: {
                     type: "object",
                     properties: {
                       article_id: {
                         type: "string",
-                        description: "The article ID"
+                        description: "The article title/ID - use the exact 'title' field value from query_articles results (e.g., 'Colt says customer data may be stolen amid Warlock's auction • The Register')"
                       }
                     },
                     required: ["article_id"]
@@ -185,13 +185,19 @@ export default {
                 },
                 {
                   name: "search_full_text",
-                  description: "Search across ALL article text with optional filters. Combines full-text search with structured filtering (date, severity, etc). Use when structured searches fail or to find ANY mention of a term. Returns same fields as query_articles PLUS relevance scores and snippets.",
+                  description: "Search across ALL article text with optional filters. Combines full-text search with structured filtering (date, severity, etc). Use when structured searches fail or to find ANY mention of a term. Supports 3 search modes: 'exact' (default - literal phrase), 'any_word' (find articles with ANY of the words), 'all_words' (find articles with ALL words). Returns same fields as query_articles PLUS relevance scores and snippets.",
                   inputSchema: {
                     type: "object",
                     properties: {
                       query: {
                         type: "string",
                         description: "Search terms (e.g., 'HSBC', 'critical vulnerability', 'ransomware')"
+                      },
+                      search_mode: {
+                        type: "string",
+                        enum: ["exact", "any_word", "all_words"],
+                        description: "Search behavior: 'exact' (literal string match), 'any_word' (find ANY of the words), 'all_words' (find ALL words). Default: 'any_word'",
+                        default: "any_word"
                       },
                       filters: {
                         type: "object",
@@ -228,22 +234,22 @@ export default {
               ]
             }
           };
-          
+
           return new Response(JSON.stringify(response), {
-            headers: { 
+            headers: {
               "Content-Type": "application/json",
               "Transfer-Encoding": "chunked"
             }
           });
         }
-        
+
         if (body.method === "tools/call") {
           const { name, arguments: args } = body.params;
-          
+
           // Ensure container has data loaded before processing
           const containerHealth = await container.fetch(new Request("http://container/health"));
           const healthData = await containerHealth.json();
-          
+
           if (healthData.articles === 0) {
             console.log("Loading data into container from R2...");
             // Get the R2 object
@@ -255,13 +261,13 @@ export default {
                 try {
                   const loadResponse = await container.fetch(new Request("http://container/load-data", {
                     method: "POST",
-                    headers: { 
+                    headers: {
                       "Content-Type": "application/json",
                       "Content-Length": metadata.size?.toString() || "0"
                     },
                     body: stream  // Stream directly without parsing
                   }));
-                  
+
                   if (!loadResponse.ok) {
                     let errorText = "";
                     try {
@@ -270,7 +276,7 @@ export default {
                       errorText = `Status ${loadResponse.status}`;
                     }
                     console.error("Failed to load data into container:", errorText);
-                    
+
                     return new Response(JSON.stringify({
                       jsonrpc: "2.0",
                       id: body.id,
@@ -282,7 +288,7 @@ export default {
                       headers: { "Content-Type": "application/json" }
                     });
                   }
-                  
+
                   console.log("Data loaded successfully into container");
                 } catch (loadError: any) {
                   console.error("Error loading data into container:", loadError);
@@ -312,7 +318,7 @@ export default {
               });
             }
           }
-          
+
           // Handle get_workflow_instructions without calling container
           if (name === "get_workflow_instructions") {
             const workflowInstructions = {
@@ -361,7 +367,7 @@ export default {
               ],
               next_step: "Run show_searchable_fields() to begin"
             };
-            
+
             return new Response(JSON.stringify({
               jsonrpc: "2.0",
               id: body.id,
@@ -377,19 +383,19 @@ export default {
               headers: { "Content-Type": "application/json" }
             });
           }
-          
+
           let containerResponse: Response;
-          
+
           switch (name) {
             case "show_searchable_fields":
               containerResponse = await container.fetch(new Request("http://container/show_searchable_fields"));
               break;
-              
+
             case "get_field_values":
             case "show_field_values":  // Alias for compatibility
               containerResponse = await container.fetch(new Request(`http://container/get_field_values/${args.field}`));
               break;
-              
+
             case "query_articles":
               containerResponse = await container.fetch(new Request("http://container/query_articles", {
                 method: "POST",
@@ -397,11 +403,11 @@ export default {
                 body: JSON.stringify(args)
               }));
               break;
-              
+
             case "get_article_details":
               containerResponse = await container.fetch(new Request(`http://container/get_article_details/${args.article_id}`));
               break;
-              
+
             case "search_full_text":
               containerResponse = await container.fetch(new Request("http://container/search_full_text", {
                 method: "POST",
@@ -409,7 +415,7 @@ export default {
                 body: JSON.stringify(args)
               }));
               break;
-              
+
             default:
               return new Response(JSON.stringify({
                 jsonrpc: "2.0",
@@ -422,7 +428,7 @@ export default {
                 headers: { "Content-Type": "application/json" }
               });
           }
-          
+
           if (!containerResponse.ok) {
             // Try to get error message from response body
             let errorMessage = `Container error: ${containerResponse.status}`;
@@ -434,7 +440,7 @@ export default {
             } catch (e) {
               // If we can't read the error, use the status code
             }
-            
+
             return new Response(JSON.stringify({
               jsonrpc: "2.0",
               id: body.id,
@@ -446,7 +452,7 @@ export default {
               headers: { "Content-Type": "application/json" }
             });
           }
-          
+
           // Try to parse JSON response, handle non-JSON responses
           let result;
           try {
@@ -460,7 +466,7 @@ export default {
             } catch (e) {
               responseText = "Unable to read response";
             }
-            
+
             // Return error in proper JSON-RPC format
             return new Response(JSON.stringify({
               jsonrpc: "2.0",
@@ -473,7 +479,7 @@ export default {
               headers: { "Content-Type": "application/json" }
             });
           }
-          
+
           const response = {
             jsonrpc: "2.0",
             id: body.id,
@@ -486,15 +492,15 @@ export default {
               ]
             }
           };
-          
+
           return new Response(JSON.stringify(response), {
-            headers: { 
+            headers: {
               "Content-Type": "application/json",
               "Transfer-Encoding": "chunked"
             }
           });
         }
-        
+
         // Unknown method
         return new Response(JSON.stringify({
           jsonrpc: "2.0",
@@ -506,7 +512,7 @@ export default {
         }), {
           headers: { "Content-Type": "application/json" }
         });
-        
+
       } catch (error: any) {
         return new Response(JSON.stringify({
           jsonrpc: "2.0",
@@ -520,7 +526,7 @@ export default {
         });
       }
     }
-    
+
     // Home page
     if (url.pathname === "/") {
       return new Response(`
@@ -574,7 +580,7 @@ export default {
         headers: { "Content-Type": "text/html" }
       });
     }
-    
+
     return new Response("Not Found", { status: 404 });
   }
 };
